@@ -1,0 +1,203 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from deep_translator import GoogleTranslator
+import pyperclip
+from gtts import gTTS
+import os
+import json
+
+# File to store user credentials
+USER_DATA_FILE = "users.json"
+
+# Mapping of human-readable language names to GTTs language codes
+LANGUAGE_MAP = {
+    "english": "en",
+    "french": "fr",
+    "spanish": "es",
+    "german": "de",
+    "italian": "it",
+    "portuguese": "pt",
+    "chinese": "zh",
+    "japanese": "ja",
+    "korean": "ko",
+    "russian": "ru",
+}
+
+def load_users():
+    try:
+        with open(USER_DATA_FILE, "r") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_users(users):
+    with open(USER_DATA_FILE, "w") as file:
+        json.dump(users, file)
+
+def register():
+    username = reg_username_entry.get()
+    password = reg_password_entry.get()
+    
+    if not username or not password:
+        messagebox.showerror("Error", "Please enter both username and password")
+        return
+    
+    users = load_users()
+    if username in users:
+        messagebox.showerror("Error", "Username already exists")
+    else:
+        users[username] = password
+        save_users(users)
+        messagebox.showinfo("Success", "Registration successful! Please login.")
+        register_window.destroy()
+
+def open_register():
+    global register_window, reg_username_entry, reg_password_entry
+    register_window = tk.Tk()
+    register_window.title("Register")
+    register_window.geometry("350x300")
+    register_window.configure(bg="#2c3e50")  # Dark slate color
+
+    tk.Label(register_window, text="Create an Account", bg="#2c3e50", fg="white", font=("Helvetica", 16)).pack(pady=10)
+
+    tk.Label(register_window, text="Username:", bg="#2c3e50", fg="white", font=("Arial", 12)).pack(pady=5)
+    reg_username_entry = tk.Entry(register_window, width=35, font=("Arial", 12))
+    reg_username_entry.pack(pady=5)
+
+    tk.Label(register_window, text="Password:", bg="#2c3e50", fg="white", font=("Arial", 12)).pack(pady=5)
+    reg_password_entry = tk.Entry(register_window, width=35, show="*", font=("Arial", 12))
+    reg_password_entry.pack(pady=5)
+
+    reg_btn = tk.Button(register_window, text="Register", command=register, bg="#27ae60", fg="white", font=("Arial", 12, "bold"))
+    reg_btn.pack(pady=15)
+
+    exit_btn = tk.Button(register_window, text="Exit", command=register_window.destroy, bg="#e74c3c", fg="white", font=("Arial", 12, "bold"))
+    exit_btn.pack(pady=5)
+
+    register_window.mainloop()
+
+def login():
+    username = username_entry.get()
+    password = password_entry.get()
+    
+    users = load_users()
+    if username in users and users[username] == password:
+        login_window.destroy()
+        open_translator()
+    else:
+        messagebox.showerror("Login Failed", "Invalid username or password")
+
+def open_translator():
+    root = tk.Tk()
+    root.title("Language Translator")
+    root.geometry("600x450")
+    root.resizable(False, False)
+    root.configure(bg="#34495e")  # Darker background for translator
+
+    languages = ["auto"] + GoogleTranslator().get_supported_languages()
+
+    # Layout using frames
+    top_frame = tk.Frame(root, bg="#34495e")
+    top_frame.pack(pady=10)
+
+    tk.Label(top_frame, text="Source Language:", bg="#34495e", fg="white", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+    src_lang_combo = ttk.Combobox(top_frame, values=languages, width=18)
+    src_lang_combo.grid(row=0, column=1, padx=10, pady=5)
+    src_lang_combo.set("english")
+
+    tk.Label(top_frame, text="Target Language:", bg="#34495e", fg="white", font=("Arial", 12)).grid(row=0, column=2, padx=10, pady=5, sticky="w")
+    dest_lang_combo = ttk.Combobox(top_frame, values=languages, width=18)
+    dest_lang_combo.grid(row=0, column=3, padx=10, pady=5)
+    dest_lang_combo.set("french")
+
+    # Text area for input
+    tk.Label(root, text="Enter Text:", bg="#34495e", fg="white", font=("Arial", 12)).pack(pady=5)
+    text_input = tk.Text(root, height=5, width=60, font=("Arial", 12), bg="#ecf0f1", fg="#2c3e50")
+    text_input.pack(pady=5)
+
+    # Text area for output
+    tk.Label(root, text="Translation:", bg="#34495e", fg="white", font=("Arial", 12)).pack(pady=5)
+    text_output = tk.Text(root, height=5, width=60, font=("Arial", 12), bg="#ecf0f1", fg="#2c3e50")
+    text_output.pack(pady=5)
+
+    def translate_text():
+        input_text = text_input.get("1.0", tk.END).strip()
+        src_lang = src_lang_combo.get()
+        dest_lang = dest_lang_combo.get()
+
+        if not input_text:
+            messagebox.showerror("Error", "Please enter text to translate.")
+            return
+        
+        try:
+            translated_text = GoogleTranslator(source=src_lang, target=dest_lang).translate(input_text)
+            text_output.delete("1.0", tk.END)
+            text_output.insert(tk.END, translated_text)
+        except Exception as e:
+            messagebox.showerror("Translation Error", str(e))
+
+    def speak_text():
+        text = text_output.get("1.0", tk.END).strip()
+        if not text:
+            messagebox.showerror("Error", "No text to speak.")
+            return
+
+        lang_selected = dest_lang_combo.get()
+        gtts_lang = LANGUAGE_MAP.get(lang_selected.lower(), "en")  # Default to English
+
+        try:
+            tts = gTTS(text, lang=gtts_lang)
+            tts.save("speech.mp3")
+            os.system("start speech.mp3")
+        except Exception as e:
+            messagebox.showerror("TTS Error", str(e))
+
+    def copy_text():
+        translated_text = text_output.get("1.0", tk.END).strip()
+        if translated_text:
+            pyperclip.copy(translated_text)
+            messagebox.showinfo("Copied", "Text copied to clipboard.")
+        else:
+            messagebox.showerror("Error", "No text to copy.")
+
+    # Buttons in a frame
+    button_frame = tk.Frame(root, bg="#34495e")
+    button_frame.pack(pady=10)
+
+    translate_btn = tk.Button(button_frame, text="Translate", command=translate_text, bg="#3498db", fg="white", font=("Arial", 12), activebackground="#2980b9")
+    translate_btn.grid(row=0, column=0, padx=5)
+
+    copy_btn = tk.Button(button_frame, text="Copy", command=copy_text, bg="#27ae60", fg="white", font=("Arial", 12), activebackground="#1e8449")
+    copy_btn.grid(row=0, column=1, padx=5)
+
+    speak_btn = tk.Button(button_frame, text="Speak", command=speak_text, bg="#8e44ad", fg="white", font=("Arial", 12), activebackground="#732d91")
+    speak_btn.grid(row=0, column=2, padx=5)
+
+    exit_btn = tk.Button(button_frame, text="Exit", command=root.destroy, bg="#e74c3c", fg="white", font=("Arial", 12), activebackground="#c0392b")
+    exit_btn.grid(row=0, column=3, padx=5)
+
+    root.mainloop()
+
+# Login Page
+login_window = tk.Tk()
+login_window.title("Login")
+login_window.geometry("350x300")
+login_window.configure(bg="#2c3e50")
+
+tk.Label(login_window, text="Welcome to the Translator", bg="#2c3e50", fg="white", font=("Helvetica", 16)).pack(pady=10)
+
+tk.Label(login_window, text="Username:", bg="#2c3e50", fg="white", font=("Arial", 12)).pack(pady=5)
+username_entry = tk.Entry(login_window, width=35, font=("Arial", 12))
+username_entry.pack(pady=5)
+
+tk.Label(login_window, text="Password:", bg="#2c3e50", fg="white", font=("Arial", 12)).pack(pady=5)
+password_entry = tk.Entry(login_window, width=35, show="*", font=("Arial", 12))
+password_entry.pack(pady=5)
+
+login_btn = tk.Button(login_window, text="Login", command=login, bg="#3498db", fg="white", font=("Arial", 12), activebackground="#2980b9")
+login_btn.pack(pady=15)
+
+register_btn = tk.Button(login_window, text="Register", command=open_register, bg="#27ae60", fg="white", font=("Arial", 12), activebackground="#1e8449")
+register_btn.pack(pady=5)
+
+login_window.mainloop()
